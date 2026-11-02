@@ -31,7 +31,7 @@ from .models import (
     VacunaAnimal,
     Veterinario,
 )
-
+from mod_casa_temporal.models import SolicitudHogarTemporal
 
 class InformacionRefugioTests(SimpleTestCase):
     def test_refuge_homepage_uses_the_information_view(self):
@@ -39,6 +39,12 @@ class InformacionRefugioTests(SimpleTestCase):
             resolve("/refugio/").func,
             views.informacion_refugio,
         )
+
+    def test_root_redirects_to_the_refuge_homepage(self):
+        response = resolve("/").func(RequestFactory().get("/"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("inicio_refugio"))
 
     def test_root_redirects_to_the_refuge_homepage(self):
         response = resolve("/").func(RequestFactory().get("/"))
@@ -108,10 +114,12 @@ class InformacionRefugioTests(SimpleTestCase):
 
 
 class StaffContextTests(SimpleTestCase):
+    @patch("mod_refugio.context_processors.CasaTemporal.objects.filter")
     @patch("mod_refugio.context_processors.Personal.objects.filter")
     def test_staff_menu_visibility_uses_membership_not_session_role(
         self,
         personal_filter,
+        casa_filter,
     ):
         request = RequestFactory().get("/refugio/")
         request.session = {
