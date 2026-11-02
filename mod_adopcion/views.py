@@ -11,14 +11,8 @@ from django.views.decorators.http import require_POST
 
 from mod_refugio.models import Animal, Personal, Usuario
 
-from .forms import SolicitudAdopcionForm, SolicitudDevolucionAdopcionForm
-from .models import (
-    Adopcion,
-    DevolucionAdopcion,
-    Estado,
-    SeguimientoAdopcion,
-    SolicitudAdopcion,
-)
+from .forms import SolicitudAdopcionForm
+from .models import Adopcion, Estado, SeguimientoAdopcion, SolicitudAdopcion
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +41,7 @@ def animales_adopcion(request):
     )
     return render(
         request,
-        "catalogo-animales-adopcion.html",
+        "animales-adopcion.html",
         {
             "animales": animales,
             "especies": especies,
@@ -61,12 +55,6 @@ def detalle_animal(request, id_animal):
     )
     session_user = request.session.get("refugio_usuario") or {}
     supabase_uid = session_user.get("id")
-    puede_editar = bool(
-        supabase_uid
-        and Personal.objects.filter(
-            id_usuario__supabase_uid=supabase_uid
-        ).exists()
-    )
     solicitud_existente = None
     solicitud_rechazada = None
     if supabase_uid:
@@ -100,7 +88,6 @@ def detalle_animal(request, id_animal):
             "solicitud_existente": solicitud_existente,
             "solicitud_rechazada": solicitud_rechazada,
             "solicitud_form": SolicitudAdopcionForm(),
-            "puede_editar": puede_editar,
         },
     )
 
@@ -258,129 +245,13 @@ def mis_adopciones(request):
         .select_related("id_animal", "id_usuario")
         .order_by("-fecha_inicio")
     )
-    adopciones = list(adopciones)
-    devoluciones_solicitadas = set(
-        DevolucionAdopcion.objects.filter(
-            id_adopcion_id__in=[
-                adopcion.id_adopcion for adopcion in adopciones
-            ]
-        ).values_list("id_adopcion_id", flat=True)
-    )
 
     return render(
         request,
         "mis-adopciones.html",
         {
             "adopciones": adopciones,
-            "devoluciones_solicitadas": devoluciones_solicitadas,
         }
-    )
-
-
-@require_POST
-def solicitar_devolucion(request, id_adopcion):
-    session_user = request.session.get("refugio_usuario") or {}
-    supabase_uid = session_user.get("id")
-
-    if not supabase_uid:
-        return redirect_to_login(
-            request.get_full_path(),
-            login_url=resolve_url("login_usuario"),
-        )
-
-    form = SolicitudDevolucionAdopcionForm(request.POST)
-    if not form.is_valid():
-        messages.error(
-            request,
-            "Completa correctamente los datos de la solicitud de devolución.",
-        )
-        return redirect("mod_adopcion:mis_adopciones")
-
-    try:
-        with transaction.atomic():
-            adopcion = get_object_or_404(
-                Adopcion.objects.select_for_update(),
-                id_adopcion=id_adopcion,
-                id_usuario__supabase_uid=supabase_uid,
-                fecha_termino__isnull=True,
-            )
-            ya_solicitada = DevolucionAdopcion.objects.filter(
-                id_adopcion=adopcion
-            ).exists()
-            if ya_solicitada:
-                messages.info(
-                    request,
-                    "Ya existe una solicitud de devolución para esta adopción.",
-                )
-                return redirect("mod_adopcion:mis_adopciones")
-
-            estado_registrada = Estado.objects.filter(
-                tipo_estado="Devolucion",
-                nombre="Registrada",
-            ).order_by("id_estado").first()
-            if estado_registrada is None:
-                logger.error(
-                    "Return request state 'Registrada' is missing for adoption %s",
-                    id_adopcion,
-                )
-                messages.error(
-                    request,
-                    "No es posible enviar la solicitud porque el refugio no tiene "
-                    "configurado el estado Registrada para devoluciones.",
-                )
-                return redirect("mod_adopcion:mis_adopciones")
-
-            datos = form.cleaned_data
-            DevolucionAdopcion.objects.create(
-                fecha_devolucion=timezone.localdate(),
-                motivo=datos["motivo"],
-                condicion_animal=datos["condicion_animal"],
-                observacion=datos["observacion"],
-                requiere_tratamiento=datos["requiere_tratamiento"],
-                fecha_evaluacion=None,
-                id_adopcion=adopcion,
-                id_estado=estado_registrada,
-            )
-    except DatabaseError:
-        logger.exception(
-            "Unable to create return request for adoption %s and user %s",
-            id_adopcion,
-            supabase_uid,
-        )
-        messages.error(
-            request,
-            "No pudimos enviar la solicitud de devolución. Inténtalo nuevamente más tarde.",
-        )
-        return redirect("mod_adopcion:mis_adopciones")
-
-    messages.success(
-        request,
-        "Tu solicitud de devolución fue enviada al refugio para su evaluación.",
-    )
-    return redirect("mod_adopcion:mis_adopciones")
-
-
-def mis_solicitudes(request):
-    session_user = request.session.get("refugio_usuario") or {}
-    supabase_uid = session_user.get("id")
-
-    if not supabase_uid:
-        return redirect_to_login(
-            request.get_full_path(),
-            login_url=resolve_url("login_usuario"),
-        )
-
-    solicitudes = (
-        SolicitudAdopcion.objects
-        .filter(id_usuario__supabase_uid=supabase_uid)
-        .select_related("id_animal", "id_estado")
-        .order_by("-fecha_solicitud", "-id_solicitud_adopcion")
-    )
-
-    return render(
-        request,
-        "mis-solicitudes-adopcion.html",
-        {"solicitudes": solicitudes},
     )
 
 
@@ -499,4 +370,4 @@ def solicitar_adopcion(request, animal_id):
         request,
         "Tu solicitud de adopción fue enviada. El refugio la revisará.",
     )
-    return redirect("mod_adopcion:mis_solicitudes")
+    return redirect(detalle_url)
