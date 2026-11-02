@@ -295,7 +295,7 @@ def gestion_solicitudes(request):
     )
     error = None
     if request.method == "POST":
-         if request.POST.get("tipo_solicitud") == "hogar_temporal":
+        if request.POST.get("tipo_solicitud") == "hogar_temporal":
             respuesta_hogar_form = RespuestaSolicitudHogarTemporalForm(request.POST)
             solicitud_id = request.POST.get("solicitud_hogar_id")
             if not puede_gestionar_adopciones:
@@ -568,7 +568,7 @@ def gestion_solicitudes(request):
             )
     elif filtro_fecha_form.errors:
         solicitudes_voluntariado = solicitudes_voluntariado.none()
-        solicitudes_hogar_temporal = (
+    solicitudes_hogar_temporal = (
         SolicitudHogarTemporal.objects.select_related(
             "id_casa",
             "id_casa__id_usuario",
@@ -644,7 +644,7 @@ def gestion_solicitudes(request):
 
 
 def _redirect_to_filtered_solicitudes(request, anchor=None):
-        query_params = {
+    query_params = {
         key: value
         for key, value in {
             "fecha_desde": request.POST.get("fecha_desde", ""),
