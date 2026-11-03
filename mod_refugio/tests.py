@@ -404,13 +404,15 @@ class GestionSolicitudesTests(SimpleTestCase):
         )
         request.session = {"refugio_usuario": {"id": "staff-user"}}
         personal = SimpleNamespace(pk="12345678-9", rol="cuidador")
+        animal = SimpleNamespace(pk=7, save=MagicMock())
         solicitud = SimpleNamespace(
-            id_animal=SimpleNamespace(pk=7),
+            id_animal=animal,
             id_usuario=SimpleNamespace(pk=3),
             id_estado=SimpleNamespace(nombre="Pendiente"),
             save=MagicMock(),
         )
         estado_aprobado = SimpleNamespace(nombre="Aprobada")
+        estado_animal_adoptado = SimpleNamespace(pk=15, nombre="Adoptado")
 
         with (
             patch(
@@ -424,6 +426,7 @@ class GestionSolicitudesTests(SimpleTestCase):
             patch(
                 "mod_refugio.views.EstadoAdopcion.objects.filter"
             ) as estado_filter,
+            patch("mod_refugio.views.Estado.objects.filter") as estado_animal_filter,
             patch("mod_refugio.views.Adopcion.objects.create") as adoption_create,
             patch(
                 "mod_refugio.views.get_object_or_404",
@@ -439,15 +442,20 @@ class GestionSolicitudesTests(SimpleTestCase):
             estado_filter.return_value.order_by.return_value.first.return_value = (
                 estado_aprobado
             )
+            estado_animal_filter.return_value.order_by.return_value.first.return_value = (
+                estado_animal_adoptado
+            )
             response = views.gestion_solicitudes(request)
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, f"{path}#adopcion")
         self.assertIs(solicitud.id_estado, estado_aprobado)
+        self.assertEqual(animal.id_estado, estado_animal_adoptado.pk)
+        animal.save.assert_called_once_with(update_fields=("id_estado",))
         self.assertEqual(solicitud.respuesta, "Aprobada")
         self.assertEqual(solicitud.respondida_por, personal)
         adoption_create.assert_called_once_with(
-            id_animal=solicitud.id_animal,
+            id_animal=animal,
             id_usuario=solicitud.id_usuario,
             fecha_inicio=views.timezone.localdate(),
             fecha_termino=None,

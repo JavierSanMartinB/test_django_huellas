@@ -416,27 +416,46 @@ def gestion_solicitudes(request):
                                     estado_nombre,
                                 )
                             else:
+                                estado_animal = None
                                 if estado_nombre == "Aprobada":
+                                    estado_animal = Estado.objects.filter(
+                                        tipo_estado="Animal",
+                                        nombre="Adoptado",
+                                    ).order_by("id_estado").first()
+                                    if estado_animal is None:
+                                        error = (
+                                            "No se encontró el estado Adoptado para "
+                                            "los animales. No se realizó ningún cambio."
+                                        )
+                                        logger.error(
+                                            "Animal state Adoptado is missing from the database"
+                                        )
+
+                                if error is None and estado_nombre == "Aprobada":
+                                    animal = solicitud_adopcion.id_animal
+                                    animal.id_estado = estado_animal.pk
+                                    animal.save(update_fields=("id_estado",))
                                     Adopcion.objects.create(
-                                        id_animal=solicitud_adopcion.id_animal,
+                                        id_animal=animal,
                                         id_usuario=solicitud_adopcion.id_usuario,
                                         fecha_inicio=timezone.localdate(),
                                         fecha_termino=None,
                                     )
-                                solicitud_adopcion.id_estado = estado_adopcion
-                                solicitud_adopcion.respuesta = (
-                                    respuesta_adopcion_form.cleaned_data["respuesta"]
-                                )
-                                solicitud_adopcion.fecha_respuesta = timezone.localdate()
-                                solicitud_adopcion.respondida_por = personal
-                                solicitud_adopcion.save(
-                                    update_fields=(
-                                        "id_estado",
-                                        "respuesta",
-                                        "fecha_respuesta",
-                                        "respondida_por",
+                                if error is None:
+                                    solicitud_adopcion.id_estado = estado_adopcion
+                                    solicitud_adopcion.respuesta = (
+                                        respuesta_adopcion_form.cleaned_data["respuesta"]
                                     )
-                                )
+                                    solicitud_adopcion.fecha_respuesta = timezone.localdate()
+                                    solicitud_adopcion.respondida_por = personal
+                                    solicitud_adopcion.save(
+                                        update_fields=(
+                                            "id_estado",
+                                            "respuesta",
+                                            "fecha_respuesta",
+                                            "respondida_por",
+                                        )
+                                    )
                 except DatabaseError:
                     logger.exception(
                         "Unable to respond to adoption request %s by staff member %s",

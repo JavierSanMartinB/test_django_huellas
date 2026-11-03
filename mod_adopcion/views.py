@@ -39,9 +39,18 @@ def _personal_access_denied(request):
 
 
 def animales_adopcion(request):
-    animales = Animal.objects.select_related("raza").order_by("id_animal")
+    animales_disponibles = Animal.objects.exclude(
+        id_estado__in=Estado.objects.filter(
+            tipo_estado="Animal",
+            nombre="Adoptado",
+        ).values("id_estado")
+    )
+    animales = (
+        animales_disponibles.select_related("raza")
+        .order_by("id_animal")
+    )
     especies = (
-        Animal.objects.order_by()
+        animales_disponibles.order_by()
         .values_list("especie", flat=True)
         .distinct()
     )

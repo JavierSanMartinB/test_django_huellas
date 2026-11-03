@@ -515,17 +515,28 @@ class SolicitudAdopcionViewTests(SimpleTestCase):
         )
 
         with (
-            patch("mod_adopcion.views.Animal.objects.select_related") as animal_query,
-            patch("mod_adopcion.views.Animal.objects.order_by") as species_query,
+            patch("mod_adopcion.views.Estado.objects.filter") as adopted_state_filter,
+            patch("mod_adopcion.views.Animal.objects.exclude") as available_animals,
         ):
-            animal_query.return_value.order_by.return_value = [animal]
-            species_query.return_value.values_list.return_value.distinct.return_value = [
-                "perro"
+            adopted_state_filter.return_value.values.return_value = "adopted-state-ids"
+            available_animals.return_value.select_related.return_value.order_by.return_value = [
+                animal
             ]
+            (
+                available_animals.return_value.order_by.return_value
+                .values_list.return_value.distinct.return_value
+            ) = ["perro"]
 
             response = views.animales_adopcion(request)
 
         self.assertEqual(response.status_code, 200)
+        adopted_state_filter.assert_called_once_with(
+            tipo_estado="Animal",
+            nombre="Adoptado",
+        )
+        available_animals.assert_called_once_with(
+            id_estado__in="adopted-state-ids"
+        )
         self.assertContains(response, "Luna")
         self.assertContains(response, 'href="/adopcion/animales/7/"')
 
